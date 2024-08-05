@@ -1,0 +1,31 @@
+
+
+runtime: python
+runtime_config:
+    operating_system: "ubuntu22"
+    runtime_version: "3.12"
+env: flex
+
+
+
+entrypoint: streamlit run --server.port=8080 --server.address=0.0.0.0 --server.enableCORS=false --server.enableWebsocketCompression=false --server.enableXsrfProtection=false --server.headless=false app.py
+
+network:
+  session_affinity: true
+  instance_ip_mode: internal
+
+env_variables:
+  AZURE_OPENAI_API_KEY: c5c79306270c45f7b996cdec1975564e
+  AZURE_OPENAI_ENDPOINT: https://openaipoc-01.openai.azure.com
+  AZURE_OPENAI_API_VERSION: 2023-05-15
+  AZURE_OPENAI_CHAT_DEPLOYMENT_NAME: gpt-35-turbo-16k-new
+
+
+readiness_check:
+  path: "/readiness_check"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+  app_start_timeout_sec: 1800
+
