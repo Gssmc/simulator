@@ -1,25 +1,21 @@
 import streamlit as st
 import random
 import pandas as pd
-import numpy as np
 import os
 import time
-from sklearn.metrics.pairwise import cosine_similarity
-import matplotlib.pyplot as plt
 import plotly.express as px
-import spacy
-import nltk
-from textblob import TextBlob
-from sklearn.feature_extraction.text import TfidfVectorizer
-from textstat import flesch_reading_ease, text_standard
-from transformers import BertTokenizer, BertForSequenceClassification
-from transformers import TextClassificationPipeline
+from langchain.tools import BaseTool, StructuredTool, tool, Tool
+from langchain_core.runnables import RunnablePassthrough
+from langchain.prompts import ChatPromptTemplate
+import json
+from statistics import mode
+
 
 # Set page config for better appearance
 st.set_page_config(page_title="BS-CUSTOMER", page_icon="💬", layout="wide")
 
-# Configure logging
-
+# # Configure logging
+# logging.basicConfig(filename='app.log', level=logging.ERROR)
 
 # Custom CSS for styling
 st.markdown("""
@@ -114,14 +110,14 @@ with st.sidebar:
         st.session_state['page'] = 'QnAPlayer'
     if st.button("QnAPlayer+"):
         st.session_state['page'] = 'QnAPlayer+'
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-nltk.download('wordnet')
+    # if st.button("Simulator"):
+    #     st.session_state['page'] = 'Simulator'
+
 
 # Load questions
 def load_questions():
     try:
-        return pd.read_csv('Care_questions_no_repeats.csv')
+        return pd.read_csv('C:\\Users\\gokul.sivakumar-p\\Desktop\\My_Project\\v1v2_deployment\\Care_questions.csv')
     except FileNotFoundError:
         st.error("Questions dataset not found!")
         return pd.DataFrame(columns=['caller_id', 'question', 'parentintent', 'childintent', 'answer'])
@@ -138,99 +134,7 @@ def save_user_response(domain, sub_domain, question, user_answer, actual_answer,
         'response_time': response_time
     }
     df = pd.DataFrame([response_data])
-    df.to_csv('user_responses.csv', mode='a', header=not os.path.exists('user_responses.csv'), index=False)
-
- 
-
-nlp = spacy.load("en_core_web_md")
-
-def calculate_similarity(user_answer, actual_answer):
-    user_doc = nlp(user_answer)
-    actual_doc = nlp(actual_answer)
-    return user_doc.similarity(actual_doc)
-
-def calculate_relevancy(user_answer, actual_answer):
-    vectorizer = TfidfVectorizer().fit_transform([user_answer, actual_answer])
-    vectors = vectorizer.toarray()
-    cosine_sim = cosine_similarity(vectors)
-    return cosine_sim[0][1] * 5  # Scale to 5
-
-def calculate_positivity(user_answer):
-    blob = TextBlob(user_answer)
-    return (blob.sentiment.polarity + 1) * 2.5  # Scale to 5
-
-def calculate_communication(user_answer):
-    # Readability score
-    readability_score = flesch_reading_ease(user_answer)
-    
-    # Grammatical correctness
-    doc = nlp(user_answer)
-    grammatical_errors = sum([1 for token in doc if token.dep_ == 'amod' and token.head.dep_ == 'nsubj'])
-    
-    # Clarity (using readability score)
-    if readability_score >= 60:
-        clarity_score = 5
-    elif readability_score >= 50:
-        clarity_score = 4
-    elif readability_score >= 40:
-        clarity_score = 3
-    elif readability_score >= 30:
-        clarity_score = 2
-    else:
-        clarity_score = 1
-
-    # Grammatical correctness score
-    if grammatical_errors == 0:
-        grammar_score = 5
-    elif grammatical_errors <= 2:
-        grammar_score = 4
-    elif grammatical_errors <= 4:
-        grammar_score = 3
-    elif grammatical_errors <= 6:
-        grammar_score = 2
-    else:
-        grammar_score = 1
-
-    # Average the clarity and grammar scores
-    communication_score = (clarity_score + grammar_score) / 2
-    return communication_score
-
-
-model_name = "bert-base-uncased"
-tokenizer = BertTokenizer.from_pretrained(model_name)
-model = BertForSequenceClassification.from_pretrained(model_name, num_labels=2)
-
-# Create a pipeline for text classification
-pipeline = TextClassificationPipeline(model=model, tokenizer=tokenizer, return_all_scores=True)
-
-def calculate_problem_solving(user_answer):
-    # Classify the input text
-    results = pipeline(user_answer)
-
-    # Extract the problem-solving score
-    problem_solving_score = results[0][1]['score']
-    
-    # Scale the score to be out of 5
-    max_score = 5
-    scaled_score = problem_solving_score * max_score
-    
-    return scaled_score
-
-def analyze_performance(responses_df):
-    responses_df['response_time'] = responses_df['response_time'].astype(float)
-
-    responses_df['relevancy'] = responses_df.apply(lambda row: calculate_relevancy(row['user_answer'], row['actual_answer']), axis=1)
-    responses_df['positivity'] = responses_df['user_answer'].apply(calculate_positivity)
-    responses_df['communication'] = responses_df['user_answer'].apply(calculate_communication)
-    responses_df['problem_solving'] = responses_df['user_answer'].apply(calculate_problem_solving)
-
-    responses_df['overall_score'] = responses_df[['relevancy', 'positivity', 'communication', 'problem_solving']].mean(axis=1)
-
-    mean_response_time = responses_df['response_time'].mean()
-    overall_score = responses_df['overall_score'].mean()
-
-    return mean_response_time, overall_score, responses_df
-
+    df.to_csv('V1_responses.csv', mode='a', header=not os.path.exists('user_responses.csv'), index=False)
 
 
 
@@ -241,6 +145,7 @@ def display_about():
         BS-CUSTOMER is a simulator designed to train BS Customer Support agents using three main services: QnAPlayer, QnAPlayer+, and Simulator.
         - **QnAPlayer**: Tests the response of the BS agent.
         - **QnAPlayer+**: Evaluates the relevancy of the BS agent's answers using similarity scores.
+        
         
         Our goal is to provide robust training to BS agents, ensuring they can handle various scenarios effectively.
     """)
@@ -289,10 +194,6 @@ def display_about():
             This service ensures that BS agents provide relevant and accurate information aligned with expected responses.
         """)
 
-    st.subheader("Contact Us")
-    st.markdown("""
-        Have questions or feedback? Contact us at support@bs-customer.com or visit our [website](https://www.brightspeed.com/).
-    """)
 
 def display_v1():
     st.title("QnAPlayer")
@@ -351,6 +252,7 @@ def display_v1():
                     response_time = time.time() - st.session_state['question_start_time_v1']
                     st.session_state['question_start_time_v1'] = None
 
+
                     save_user_response(
                         domain=current_question['parentintent'],
                         sub_domain=current_question['childintent'],
@@ -365,7 +267,7 @@ def display_v1():
                         'question': current_question['question'],
                         'user_answer': user_answer,
                         'actual_answer': current_question['answer'],
-                        'response_time': response_time,
+                        'response_time': response_time
                     })
                     st.session_state['chat_v1'].append({"content": user_answer, "role": "user"})
                     st.session_state['current_question_index_v1'] += 1
@@ -490,8 +392,6 @@ def display_v2():
                     response_time = time.time() - st.session_state['question_start_time_v2']
                     st.session_state['question_start_time_v2'] = None
 
-                    similarity_score = calculate_similarity(user_answer, current_question['answer'])
-
                     save_user_response(
                         domain=current_question['parentintent'],
                         sub_domain=current_question['childintent'],
@@ -507,7 +407,6 @@ def display_v2():
                         'user_answer': user_answer,
                         'actual_answer': current_question['answer'],
                         'response_time': response_time,
-                        'similarity_score': similarity_score
                     })
                     st.session_state['chat_v2'].append({"content": user_answer, "role": "user"})
                     st.session_state['current_question_index_v2'] += 1
@@ -558,32 +457,122 @@ def display_v2():
             with col2:
                 if st.button("Get Analysis"):
                     try:
+                        from langchain_openai import AzureChatOpenAI
+                        import os
+
+
+                        os.environ["AZURE_OPENAI_API_KEY"] = "c5c79306270c45f7b996cdec1975564e"
+                        os.environ["AZURE_OPENAI_ENDPOINT"] = "https://openaipoc-01.openai.azure.com"
+                        os.environ["AZURE_OPENAI_API_VERSION"] = "2023-05-15"
+                        os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"] = "gpt-35-turbo-16k-new"
+                        #print(key)
+                        def get_chat_model():
+                            model = AzureChatOpenAI(
+                            openai_api_version=os.environ["AZURE_OPENAI_API_VERSION"],
+                            azure_deployment=os.environ["AZURE_OPENAI_CHAT_DEPLOYMENT_NAME"],
+                        )
+                            return model
+
+                        def v2_evaluate(msg):
+                            @tool
+                            def get_intraction(input:str)->str:
+                                "get the chat intraction"
+                                return msg
+
+
+                            etool=[get_intraction]
+                            system = """You are the Customer Support Agent evaluator, your job is to evaluate the performance of the Customer support agent by accessing the tool. You should start evaluating if you input is "SCORE"
+                            Instructions: 
+                            step 1: you should consider HumanMessage with AIMessage in the tool is the agent message.
+                            step 2: you should evaluat the based on Quality_of_Response, Communication_Skills, Empathy_and_Tone, Problem_Solving_Skills, Sentiment_Analysis, Chat_Etiquette.
+                            step 3: You should give the rounded score for each metric out of five respectively .
+                            your output should be python str dict of scores. dont't add any new lines.
+                            """
+                            prompt = ChatPromptTemplate.from_messages(
+                                [
+                                    ("system", system),
+                                    ("human", "{question}"),
+                                ]
+                            )
+                            query_analyzer = {"question": RunnablePassthrough()} | prompt | get_chat_model()
+                            print(query_analyzer.invoke("SCORE").content)
+                            return query_analyzer.invoke("SCORE").content
+                        
+                        def v2_mode_evaluate():
+                            json.dumps(v2_evaluate(msg))
+
+                            results = [json.loads(v2_evaluate(msg)) for _ in range(5)]
+
+                            # Initialize a dictionary to store the lists of values for each key
+                            aggregated_results = {key: [] for key in results[0].keys()}
+
+                            # Aggregate the results
+                            for result in results:
+                                for key, value in result.items():
+                                    aggregated_results[key].append(value)
+
+                            # Calculate the mode for each key and store in the final dictionary
+                            mode_results = {key: mode(values) for key, values in aggregated_results.items()}
+                            print(type(mode_results.values))
+
+                            return mode_results
+                        
+                        def store_scores_to_csv_v2(ev_data):
+                            # Calculate the overall score and round it to the nearest integer
+                            overall_score = round(sum(ev_data.values()) / len(ev_data))
+                            
+                            # Add the overall score to the data
+                            ev_data['Overall_Score'] = overall_score
+                            
+                            # Convert the data to a DataFrame
+                            df = pd.DataFrame([ev_data])
+                            
+                            # Write the data to a CSV file, appending if it already exists
+                            df.to_csv("V2_Evaluated_Output.csv", mode='a', index=False, header=not pd.io.common.file_exists("V2_Evaluated_Output.csv"))
+                            
+                            print(f"Data successfully written to Evaluated_Output.csv")
+
+
+                    
+
+
+
                         st.balloons()
                         responses_df = pd.DataFrame(st.session_state['responses_v2'])
 
-                        mean_response_time, overall_score, detailed_df = analyze_performance(responses_df)
+                        # Convert chat messages to the required format
+                        chat_interaction = []
+                        for msg in st.session_state['chat_v2']:
+                            if msg['role'] == 'user':
+                                chat_interaction.append(HumanMessage(content=msg['content']))
+                            else:
+                                chat_interaction.append(AIMessage(content=msg['content']))
 
-                        st.write("Interaction Details:")
-                        st.dataframe(detailed_df)
+                        # Evaluate the interaction
+                        v2_evaluate(chat_interaction)
 
-                        # Save interaction details to CSV
-                        detailed_df.to_csv('interaction_details.csv', mode='a', header=not os.path.exists('interaction_details.csv'), index=False)
 
-                        # Store the interaction analysis
-                        if 'interaction_scores' not in st.session_state:
-                            st.session_state['interaction_scores'] = []
+                        score=v2_mode_evaluate()
 
-                        st.session_state['interaction_scores'].append(overall_score)
-
-                        # Display the mean of all interaction scores
-                        mean_interaction_score = np.mean(st.session_state['interaction_scores'])
-                        st.markdown(f"<h1 style='text-align: center; color: green;'>Your Score: {mean_interaction_score:.2f}/5</h1>", unsafe_allow_html=True)
+                        # Store the evaluation data in a CSV file
+                        store_scores_to_csv_v2(score)
+                        print(score)
+                        # Display the overall score
+                        score_data=pd.read_csv("V2_Evaluated_Output.csv")
+                        last_value=score_data.iloc[-1]['Overall_Score']
+         
+                        st.markdown(f"<h1 style='text-align: center; color: green;'>Your Score: {last_value}/5</h1>", unsafe_allow_html=True)
                     except ValueError as e:
                         st.error(f"An error occurred while generating the analysis: {str(e)}")
                         st.write("Please restart the interaction and try again.")
 
+class HumanMessage:
+    def __init__(self, content):
+        self.content = content
 
-
+class AIMessage:
+    def __init__(self, content):
+        self.content = content
 # Handle navigation
 if st.session_state['page'] == 'home':
     display_about()
@@ -591,11 +580,7 @@ elif st.session_state['page'] == 'QnAPlayer':
     display_v1()
 elif st.session_state['page'] == 'QnAPlayer+':
     display_v2()
+# elif st.session_state['page'] == 'Simulator':
+#     display_v3()
 else:
     display_about()
-
-
-
-
-
-
