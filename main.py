@@ -117,7 +117,7 @@ with st.sidebar:
 # Load questions
 def load_questions():
     try:
-        return pd.read_csv('C:\\Users\\gokul.sivakumar-p\\Desktop\\My_Project\\v1v2_deployment\\Care_questions_no_repeats.csv')
+        return pd.read_csv('./Care_questions_no_repeats.csv')
     except FileNotFoundError:
         st.error("Questions dataset not found!")
         return pd.DataFrame(columns=['caller_id', 'question', 'parentintent', 'childintent', 'answer'])
